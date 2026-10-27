@@ -1,0 +1,15 @@
+{
+  "codigoDisciplina": "ADS001",
+  "blocks": [
+    {
+      "type": "paragraph",
+      "tag": "p",
+      "html": "<a href=\"https://exemplo.test/caminho\" class=\"x\">texto do link</a><script>ALERTA_SCRIPT</script><style>ALERTA_STYLE</style><iframe>ALERTA_IFRAME</iframe><object>ALERTA_OBJECT</object><embed>ALERTA_EMBED</embed><img src=\"AAAA\" alt=\"foto\">"
+    },
+    {
+      "type": "table",
+      "tag": "table",
+      "html": "<table><tbody><tr><td colspan=\"2\" style=\"color:red\">Celula</td></tr></tbody></table>"
+    }
+  ]
+}
