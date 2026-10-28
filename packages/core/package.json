@@ -1,0 +1,28 @@
+{
+  "name": "@conversor/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "conversor": "./bin/conversor.js"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/sanitize-html": "2.16.2",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  },
+  "dependencies": {
+    "@conversor/contratos": "workspace:*",
+    "htmlparser2": "12.0.0",
+    "sanitize-html": "2.18.1",
+    "uuid": "14.0.3"
+  }
+}
