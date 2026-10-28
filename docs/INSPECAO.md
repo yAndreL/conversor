@@ -55,7 +55,7 @@ Valor: `DESENVOLVIMENTO`. É igual a `eduno.lookupCode` e ao sufixo do nome do a
 
 ## O que duplica o corpo
 
-`toc` e `headings` repetem os 18 headings em texto, id, nível e tag. `contentHtml` (cerca de 2 MB) repete o documento renderizado e embute as imagens. `images` repete as 10 imagens dos `imageGroup`. Esses quatro ficam de fora da saída. O sumário que permanece é o que está em `blocks`: o heading `SUMÁRIO` e os 17 parágrafos.
+`toc` e `headings` repetem os 18 headings em texto, id, nível e tag. `contentHtml` (cerca de 2 MB) repete o documento renderizado e embute as imagens. `images` repete as 10 imagens dos `imageGroup`. Esses quatro ficam de fora da saída. O sumário que está em `blocks` — o heading `SUMÁRIO` e os 17 parágrafos — também fica de fora da conversão.
 
 ## Totais de `counts`
 
