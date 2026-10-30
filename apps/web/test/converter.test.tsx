@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { expect, it, vi } from "vitest";
 
+import { utils, write } from "xlsx";
+
 import { Converter } from "../src/paginas/Converter.js";
 
 const ID = "11111111-1111-4111-8111-111111111111";
@@ -32,15 +34,35 @@ function montar(limites = LIMITES_PADRAO) {
 }
 
 function soltar(arquivos: File[]) {
-  fireEvent.drop(screen.getByRole("button", { name: "Solte os arquivos JSON aqui" }), {
+  fireEvent.drop(screen.getByRole("button", { name: "Solte os arquivos JSON ou a planilha Excel aqui" }), {
     dataTransfer: { files: arquivos },
   });
+}
+
+function arquivoPlanilha(nome: string, linhas: unknown[][]): File {
+  const folha = utils.aoa_to_sheet(linhas);
+  const livro = utils.book_new();
+  utils.book_append_sheet(livro, folha, "Planilha1");
+  const gerado: unknown = write(livro, { type: "array", bookType: "xlsx" });
+  const bytes = bytesDe(gerado);
+  return new File([bytes], nome);
+}
+
+function bytesDe(gerado: unknown): Uint8Array<ArrayBuffer> {
+  if (gerado instanceof Uint8Array) return new Uint8Array(gerado);
+  if (gerado instanceof ArrayBuffer) return new Uint8Array(gerado);
+  if (Array.isArray(gerado)) return Uint8Array.from(gerado as number[]);
+  throw new Error("formato inesperado");
 }
 
 it("soltar arquivo só seleciona e o envio abre os arquivos", async () => {
   const buscar = montar();
   const usuario = userEvent.setup();
-  expect(screen.getByText("Envie os arquivos JSON e receba o texto convertido de cada um, pronto para baixar.")).toBeTruthy();
+  expect(
+    screen.getByText(
+      "Envie os arquivos JSON e receba o texto convertido de cada um. Uma planilha de alunos (.xlsx) baixa o JSON com cursos e disciplinas.",
+    ),
+  ).toBeTruthy();
   expect(screen.queryByText(/lote segue o contrato/)).toBeNull();
   const botao = screen.getByRole("button", { name: "Converter agora" });
   expect((botao as HTMLButtonElement).disabled).toBe(true);
@@ -177,5 +199,62 @@ it("para no lote cheio e fecha com a frase da resposta", async () => {
     { arquivo_origem: "a.json", motivo: "limite_lote", diagnostico: "O lote passou de 5.000 arquivos." },
     { arquivo_origem: "b.json", motivo: "limite_lote", diagnostico: "O lote passou de 5.000 arquivos." },
   ]);
+  vi.unstubAllGlobals();
+});
+
+it("planilha excel baixa o json hierárquico sem abrir lote", async () => {
+  const buscar = montar();
+  const usuario = userEvent.setup();
+  let lido = Promise.resolve("");
+  vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => {
+    if (!(blob instanceof Blob)) throw new Error("download sem blob");
+    lido = blob.text();
+    return "blob:planilha";
+  });
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+  soltar([
+    arquivoPlanilha("alunos.xlsx", [
+      ["name", "cpf", "curso", "disciplina", "notaobtida", "datanasc"],
+      ["Aluno A", "111", "Curso B", "Disciplina X", "10.00", 29861],
+      ["Aluno A", "111", "Curso B", "Disciplina Y", "NULL", 29861],
+      ["Aluno A", "111", "Curso C", "Disciplina W", "8", 29861],
+    ]),
+  ]);
+  await usuario.click(await screen.findByRole("button", { name: "Converter agora (1)" }));
+  expect(await screen.findByText("JSON baixado. alunos.xlsx: 1 aluno, 2 cursos, 3 disciplinas")).toBeTruthy();
+  expect(JSON.parse(await lido)).toMatchObject([
+    {
+      name: "Aluno A",
+      cpf: "111",
+      datanasc: "1981-10-02",
+      cursos: [
+        {
+          curso: "Curso B",
+          disciplinas: [
+            { disciplina: "Disciplina X", notaobtida: 10 },
+            { disciplina: "Disciplina Y", notaobtida: null },
+          ],
+        },
+        { curso: "Curso C", disciplinas: [{ disciplina: "Disciplina W", notaobtida: 8 }] },
+      ],
+    },
+  ]);
+  expect(buscar.mock.calls.every((chamada) => String(chamada[0]) === "/api/limites")).toBe(true);
+  vi.unstubAllGlobals();
+});
+
+it("json e planilha juntos não enviam", async () => {
+  const buscar = montar();
+  const usuario = userEvent.setup();
+  soltar([
+    new File(["{}"], "nota.json"),
+    arquivoPlanilha("alunos.xlsx", [
+      ["name", "curso", "disciplina"],
+      ["A", "B", "C"],
+    ]),
+  ]);
+  await usuario.click(await screen.findByRole("button", { name: "Converter agora (2)" }));
+  expect(await screen.findByText("Separe a planilha Excel dos arquivos JSON. Cada tipo converte de um jeito.")).toBeTruthy();
+  expect(buscar.mock.calls.every((chamada) => String(chamada[0]) === "/api/limites")).toBe(true);
   vi.unstubAllGlobals();
 });
