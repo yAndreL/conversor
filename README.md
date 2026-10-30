@@ -6,8 +6,8 @@ Converte em lote os JSON `json-convert.document.v4` para TXT com HTML sanitizado
 
 ```bash
 corepack pnpm install
-corepack pnpm dev      # API
-corepack pnpm dev:web  # interface
+corepack pnpm dev                                   /* USAR ESTE COMANDO */
+corepack pnpm dev:web                               /* USAR ESTE COMANDO */
 corepack pnpm --filter @conversor/core exec conversor --entrada pasta_json --saida output
 ```
 
