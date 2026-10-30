@@ -23,6 +23,7 @@ import {
   type FalhaPagina,
   type FatiaEnvio,
 } from "../selecao.js";
+import { ehPlanilhaExcel, lerPlanilhaAlunos, nomeJsonDaPlanilha, type AlunoPlanilha } from "../planilhaAlunos.js";
 import { enviarFatias, type ResultadoFatias } from "../subida.js";
 
 type Estado = "vazio" | "selecionado" | "enviando" | "retidos" | "lote_cheio" | "erro";
@@ -121,6 +122,21 @@ export function Converter() {
 
   async function converter() {
     if (arquivos.length === 0 || estado === "enviando" || estado === "retidos" || estado === "lote_cheio") return;
+    const tipo = classificarArquivos(arquivos);
+    switch (tipo) {
+      case "planilha":
+        await converterPlanilha();
+        return;
+      case "misturado":
+        setMensagem("Separe a planilha Excel dos arquivos JSON. Cada tipo converte de um jeito.");
+        return;
+      case "json":
+        break;
+      default: {
+        const nunca: never = tipo;
+        return nunca;
+      }
+    }
     const partes = separarSelecao(arquivos, limites.maxBytesArquivo);
     const fatias = montarFatias(partes.enviar, limites);
     setFalhasPagina(partes.falhas);
@@ -144,6 +160,30 @@ export function Converter() {
     } catch (falha: unknown) {
       setEstado(arquivos.length > 0 ? "erro" : "vazio");
       setMensagem(falha instanceof Error ? falha.message : "Falha ao enviar.");
+    }
+  }
+
+  async function converterPlanilha() {
+    setEstado("enviando");
+    setMensagem("Lendo a planilha…");
+    setProgresso({ atual: 0, total: 0 });
+    await new Promise((resolver) => {
+      setTimeout(resolver, 0);
+    });
+    try {
+      const partes: string[] = [];
+      for (const arquivo of arquivos) {
+        const alunos = await lerPlanilhaAlunos(await arquivo.arrayBuffer(), (linhas) => {
+          setMensagem(`Lendo a planilha… ${formatarInteiro(linhas)} linhas`);
+        });
+        baixarJson(nomeJsonDaPlanilha(arquivo.name), alunos);
+        partes.push(`${arquivo.name}: ${textoDaHierarquia(alunos)}`);
+      }
+      setEstado("selecionado");
+      setMensagem(`JSON baixado. ${partes.join(" · ")}`);
+    } catch (falha: unknown) {
+      setEstado("erro");
+      setMensagem(falha instanceof Error ? falha.message : "Falha ao ler a planilha.");
     }
   }
 
@@ -211,7 +251,10 @@ export function Converter() {
       <section className="centro">
         <p className="selo">CONVERSOR LOCAL</p>
         <h1>Converter JSON para TXT</h1>
-        <p className="subtitulo">Envie os arquivos JSON e receba o texto convertido de cada um, pronto para baixar.</p>
+        <p className="subtitulo">
+          Envie os arquivos JSON e receba o texto convertido de cada um. Uma planilha de alunos (.xlsx) baixa o JSON com
+          cursos e disciplinas.
+        </p>
       </section>
       <form
         className="cartao zona"
@@ -227,7 +270,7 @@ export function Converter() {
           void converter();
         }}
       >
-        <div className="icone-zona" role="button" tabIndex={0} aria-label="Solte os arquivos JSON aqui" onKeyDown={aoTecla}>
+        <div className="icone-zona" role="button" tabIndex={0} aria-label="Solte os arquivos JSON ou a planilha Excel aqui" onKeyDown={aoTecla}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#E53935" strokeWidth="1.8" aria-hidden="true">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3" />
@@ -241,7 +284,7 @@ export function Converter() {
               className="arquivo"
               type="file"
               name="arquivos"
-              accept=".json,application/json"
+              accept=".json,.xlsx,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               multiple
               onChange={(evento) => {
                 if (evento.currentTarget.files) adicionar(evento.currentTarget.files);
@@ -254,7 +297,7 @@ export function Converter() {
           </button>
         </div>
         <p className="dica">
-          ou solte os arquivos <strong>.json</strong> aqui
+          ou solte os arquivos <strong>.json</strong> ou a planilha <strong>.xlsx</strong> aqui
         </p>
         {mensagem ? <p className="aviso">{mensagem}</p> : null}
         {arquivos.length > 0 && arquivos.length <= 50 ? (
@@ -302,4 +345,42 @@ export function Converter() {
       </form>
     </>
   );
+}
+
+type TipoSelecao = "json" | "planilha" | "misturado";
+
+function classificarArquivos(lista: readonly File[]): TipoSelecao {
+  if (lista.length === 0) return "json";
+  let planilhas = 0;
+  for (const arquivo of lista) {
+    if (ehPlanilhaExcel(arquivo.name)) planilhas += 1;
+  }
+  if (planilhas === lista.length) return "planilha";
+  if (planilhas === 0) return "json";
+  return "misturado";
+}
+
+function textoQuantidade(valor: number, singular: string, plural: string): string {
+  return `${formatarInteiro(valor)} ${valor === 1 ? singular : plural}`;
+}
+
+function textoDaHierarquia(alunos: readonly AlunoPlanilha[]): string {
+  const cursos = alunos.reduce((soma, aluno) => soma + aluno.cursos.length, 0);
+  const disciplinas = alunos.reduce(
+    (soma, aluno) => soma + aluno.cursos.reduce((total, curso) => total + curso.disciplinas.length, 0),
+    0,
+  );
+  return `${textoQuantidade(alunos.length, "aluno", "alunos")}, ${textoQuantidade(cursos, "curso", "cursos")}, ${textoQuantidade(disciplinas, "disciplina", "disciplinas")}`;
+}
+
+function baixarJson(nome: string, dados: unknown) {
+  const blob = new Blob([`${JSON.stringify(dados, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nome;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

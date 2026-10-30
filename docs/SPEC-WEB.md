@@ -2,7 +2,7 @@
 
 Contrato da API e das duas telas. A conversão continua em [SPEC.md](SPEC.md). A arquitetura está em [SPEC-MIGRACAO.md](SPEC-MIGRACAO.md). O visual está em [Design/DESIGN.md](../Design/DESIGN.md) e em `apps/web/src/estilos.css`. O desenho do lote único está em [superpowers/specs/2026-10-28-lote-unico-design.md](superpowers/specs/2026-10-28-lote-unico-design.md).
 
-A ferramenta é interna: sem login, sem banco e sem histórico persistente. Nesta fase o upload aceita só `.json`. Zip de entrada fica para uma evolução.
+A ferramenta é interna: sem login, sem banco e sem histórico persistente. O lote aceita só `.json`. Zip de entrada fica para uma evolução. Uma planilha `.xlsx` de alunos não entra no lote: na mesma tela, o navegador monta o JSON e baixa o arquivo.
 
 Cada critério cita o RW que cobre. Mudou o contrato, esta SPEC muda antes do código. A linha de comando não muda.
 
@@ -299,7 +299,9 @@ Na interface, o pedaço transportado se chama envio. Lote é o conjunto inteiro.
 
 ### Converter
 
-O selo é "CONVERSOR LOCAL". O subtítulo fala do produto: enviar os JSON e baixar o texto convertido. A tela não descreve sanitização, blocks, links nem UUID. Os botões "+ Selecionar arquivos" e "Converter agora" ficam na mesma linha. O seletor usa a cor secundária `#475569`. Com arquivos na seleção, o botão de envio mostra a quantidade, como "Converter agora (9)".
+O selo é "CONVERSOR LOCAL". O subtítulo fala do produto: enviar os JSON e baixar o texto convertido, e também da planilha de alunos. A tela não descreve sanitização, blocks, links nem UUID. Os botões "+ Selecionar arquivos" e "Converter agora" ficam na mesma linha. O seletor usa a cor secundária `#475569`. Com arquivos na seleção, o botão de envio mostra a quantidade, como "Converter agora (9)".
+
+Se a seleção inteira é `.xlsx`, o clique não chama a API. O navegador lê a primeira aba em fluxo, agrupa as linhas em aluno, depois em curso, depois em disciplina, e baixa `{nome}.json`. O nome troca só a extensão. Célula vazia ou `NULL` vira `null`. `datanasc`, `data_inicio`, `data_limite` e `cert_emissao` saem como `AAAA-MM-DD`. Nota e frequência numéricas saem como número. Cabeçalhos equivalentes entram nos mesmos campos: `aluno` em `name`, `empresa` em `codempresa`, `aproveitamento` em `notaobtida`, `data_termino_limite` em `data_limite`, `opcao_estagio` em `opcaoestagio`, `stado_civil` em `estado_civil` e `ert_emissao` em `cert_emissao`. `modulo`, `frequencia` e `carga_horaria` ficam na disciplina. `sistec_codigo` fica no curso. Aluno repetido junta pelo CPF; curso repetido do mesmo aluno junta pelo nome; disciplina idêntica no mesmo curso entra uma vez. Disciplina com o mesmo nome e módulo, status, nota, frequência ou carga horária diferentes entra de novo. A mensagem conta alunos, cursos e disciplinas. JSON e `.xlsx` na mesma seleção não enviam e não baixam: a tela pede para separar. O botão, nesse caso, continua "Converter agora (N)".
 
 A seleção acima de `maxArquivosSelecao` não substitui a seleção atual. A mensagem é `A seleção passa de 2.500 arquivos.` quando o teto é 2500, com o número em pt-BR para outro teto.
 
