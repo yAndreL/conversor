@@ -8,8 +8,8 @@
   },
   "scripts": {
     "test": "corepack pnpm --filter @conversor/core --filter @conversor/server --filter @conversor/web test",
-    "dev": "pnpm --filter @conversor/server dev",
-    "dev:web": "pnpm --filter @conversor/web dev",
+    "dev": "corepack pnpm --filter @conversor/server dev",
+    "dev:web": "corepack pnpm --filter @conversor/web dev",
     "lint": "eslint packages apps"
   },
   "devDependencies": {
