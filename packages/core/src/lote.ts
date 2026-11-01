@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   mkdirSync,
   readdirSync,
@@ -12,7 +13,7 @@ import path from "node:path";
 import { documentoEntradaSchema } from "@conversor/contratos";
 
 import { renderizar } from "./documento.js";
-import { chaveCanonica, ehObjeto, identificadorDe } from "./identidade.js";
+import { ehObjeto } from "./identidade.js";
 
 export type Status = "convertido" | "sem_codigo" | "erro";
 
@@ -54,7 +55,7 @@ const RESERVADOS = new Set([
 // Controle e DEL são proibidos no nome do arquivo.
 // eslint-disable-next-line no-control-regex
 const PROIBIDOS = /[\u0000-\u001f\u007f\\/:*?"<>|]/;
-const ORFAO = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.txt$/;
+const ORFAO = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:az.+)?\.txt$/;
 
 export function converterPasta(
   entrada: string,
@@ -151,8 +152,8 @@ export function prepararArquivo(caminho: string, origem: string): Preparo {
     };
   }
   const { corpo, motivos } = renderizar(estrutural.data.blocks);
-  const uuid = identificadorDe(chaveCanonica(estrutural.data.blocks));
-  const nome = `${uuid}.txt`;
+  const uuid = randomUUID();
+  const nome = `${uuid}az${limparCodigo(situacao.codigo)}.txt`;
   return { pronto: true, codigo: situacao.codigo, origem, uuid, nome, corpo, motivos };
 }
 
