@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export {
   FRASE_COLISAO,
+  FRASE_TELA_NAVEGADOR,
   FRASE_DUPLICADO,
   FRASE_ENVIO,
   FRASE_FORA_DE_RECEBIMENTO,

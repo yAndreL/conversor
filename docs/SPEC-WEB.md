@@ -327,6 +327,8 @@ A tela lê o lote cujo `id` está na rota. O último `id` aberto na aba fica gua
 
 A cada 1 segundo, enquanto `status` é `recebendo` ou `processando`, a tela consulta `GET /api/lotes/{id}` para as métricas e `GET /api/lotes/{id}/linhas` da página visível para a tabela. As métricas lidos, convertidos, erros e sem código saem de `total` e `contagens`, não da página visível. Durante `processando`, o texto de progresso é `Convertendo 400 de 2.500`.
 
+Quando o `diagnostico` contém `A imagem mostra a tela do navegador.`, a coluna Motivo mostra essa frase mesmo com status `convertido`, e o arquivo também entra numa segunda lista, “Tela do navegador”. A conversão não para.
+
 A tabela mostra 200 linhas por página. Os controles são `Página anterior`, `Próxima página` e o indicador `Página 2 de 13`, com números em pt-BR. A busca volta para a página 1. A coluna Motivo mostra `diagnostico`. A coluna Saída, durante `processando` e `recebendo`, mostra o nome como texto, sem link. Com o lote `concluido`, o link de saída aponta para `GET /api/lotes/{id}/arquivos/{nome}` com o nome em percent-encoding. O txt se chama `{uuid}az{codigoSanitizado}.txt`. Sem busca, na página 1, a primeira linha é `relacao.csv` e não consome uma das 200. Cada linha de arquivo tem um checkbox antes do arquivo original. O checkbox do cabeçalho marca ou desmarca as linhas visíveis. A marca sobrevive à troca de página.
 
 `Baixar zip do lote` fica habilitado com o lote `concluido` e baixa o zip completo, sem query `arquivo` e sem exigir marca. `Baixar seleção` fica habilitado com ao menos uma linha marcada, inclusive fora da página visível, e baixa só os txt dessas linhas.

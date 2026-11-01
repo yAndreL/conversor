@@ -45,7 +45,7 @@ Interface de linha de comando: `conversor --entrada DIR --saida DIR [--limpar] [
 
 Identificadores de código em inglês. Comentários, documentação e os nomes `resultado.csv` e `erros.log` em português. Os campos do schema permanecem como estão (`codigoDisciplina`, `documentId`, `blocks`).
 
-Motivos do log: `leitura`, `json_invalido`, `blocks_invalidos`, `sem_codigo`, `tipo_codigo`, `bloco_ignorado:{tipo}`, `colisao`, `orfao`.
+Motivos do log: `leitura`, `json_invalido`, `blocks_invalidos`, `sem_codigo`, `tipo_codigo`, `bloco_ignorado:{tipo}`, `tela_navegador`, `colisao`, `orfao`. `tela_navegador` não muda o status.
 
 ## Decisões fechadas
 
@@ -70,6 +70,7 @@ Motivos do log: `leitura`, `json_invalido`, `blocks_invalidos`, `sem_codigo`, `t
 - RF-07. `aside`: emitir `<p>` com `text` como texto. Ignorar `role`. Texto vazio pela definição de RF-04: não emitir.
 - RF-32. `list`: emitir `<ol>` quando `ordered` for o booleano verdadeiro; caso contrário, `<ul>`. Cada item string de `items` vira `<li>` com o texto escapado, na ordem do array. Item que não é string não entra. Sem nenhum item string, não emitir HTML e não registrar `bloco_ignorado`.
 - RF-08. `imageGroup`: emitir `<p>` com um `<img>` por item de `images` cujo `src` seja `data:image/<mime>;base64,<carga>`. A carga só pode ter o alfabeto Base64. `alt` string não vazia entra no atributo `alt`. `src` que não seja essa URI não entra. O mesmo vale para o bloco `image`, lendo `src` e `alt` do próprio bloco; sem URI válida, o motivo é `bloco_ignorado:image`.
+- RF-33. JPEG `data:image/jpeg;base64` ou `data:image/jpg;base64`, em paisagem e com largura de pelo menos 800 px, cuja faixa inferior destoa da faixa de cima, gera o motivo `tela_navegador` uma vez por arquivo. A imagem permanece no txt e o status continua `convertido`.
 - RF-09. Tipo de bloco ausente ou desconhecido: não emitir, motivo `bloco_ignorado:{tipo}`, seguir. O arquivo continua `convertido` se o código for válido.
 - RF-10. Montar o documento inteiro e passar essa string uma única vez no sanitizador. Tags permitidas: `p`, `br`, `strong`, `b`, `em`, `i`, `u`, `h1`, `h2`, `h3`, `h4`, `h5`, `h6`, `ul`, `ol`, `li`, `table`, `thead`, `tbody`, `tr`, `th`, `td`, `blockquote`. Nenhum atributo, exceto `colspan` e `rowspan` em `th` e `td`. Descartar tag e miolo de `script`, `style`, `iframe`, `object` e `embed`. Tag fora da allowlist e fora dessa lista é desembrulhada, e o conteúdo interno fica.
 - RF-11. `<a>` sai e o texto interno fica. `href` e `id` somem. A URL fica somente quando ela é o texto visível.
@@ -145,6 +146,7 @@ Com `--estrito`, o lote devolve 1 se existir linha `erro`.
 - CA-22 (RF-01). Dado um `.json` em subpasta, um `.json` apontado por link simbólico e um diretório apontado por link simbólico. Quando converter. Então o arquivo da subpasta entra, os dois links não entram, e a ordem dos caminhos relativos é lexicográfica.
 - CA-23 (RF-02). Dado um JSON sem `blocks` e outro em que `blocks` é um objeto. Quando converter. Então os dois ficam `erro` com motivo `blocks_invalidos` e o lote segue.
 - CA-24 (RF-09). Dado um bloco de tipo desconhecido junto de um parágrafo válido. Quando converter. Então o parágrafo aparece, o bloco desconhecido não aparece, o status é `convertido` e o log contém `bloco_ignorado:{tipo}`.
+- CA-32 (RF-33). Dado um JPEG paisagem com faixa inferior escura. Quando converter. Então o `<img>` sai, o status é `convertido` e o log contém `tela_navegador`.
 - CA-31 (RF-32). Dado um `list` com `ordered` falso, itens string e um item que não é string, outro `list` com `ordered` verdadeiro e um `list` sem item string. Quando converter. Então o primeiro sai `<ul>` com o texto escapado, o segundo sai `<ol>`, o terceiro não gera HTML, o status é `convertido` e o log não contém `bloco_ignorado:list`.
 - CA-25 (RF-15). Dado um convertido de código `ADS001`. Quando olhar o nome. Então ele é `{uuid}azADS001.txt`, com UUID versão 4 em minúsculas, 36 caracteres e hífens.
 - CA-26 (RF-21). Dado um lote com convertidos, erro, sem código, código repetido e um órfão. Quando converter. Então o stdout tem as seis linhas do contrato, com os números desse lote.

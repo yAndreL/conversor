@@ -17,6 +17,7 @@ export const FRASE_NOME_INVALIDO = "O nome do arquivo não pode ser gravado.";
 export const FRASE_ENVIO = "Não foi possível enviar o arquivo.";
 export const FRASE_LEITURA = "Não foi possível ler o arquivo.";
 export const FRASE_COLISAO = "Outro arquivo deste lote já gerou o mesmo txt.";
+export const FRASE_TELA_NAVEGADOR = "A imagem mostra a tela do navegador.";
 export const FRASE_LOTE_OCUPADO = "Ainda há envio em andamento.";
 export const FRASE_FORA_DE_RECEBIMENTO = "O lote não está recebendo arquivos.";
 export const FRASE_LOTE_AUSENTE = "Lote inexistente ou expirado.";

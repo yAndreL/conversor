@@ -729,3 +729,58 @@ it("mostra o motivo só na linha com erro e omite bloco ignorado", async () => {
   expect(screen.queryByText("codigoDisciplina ausente.")).toBeNull();
   vi.unstubAllGlobals();
 });
+
+it("agrupa a tela do navegador e mantem o arquivo convertido", async () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const frase = "A imagem mostra a tela do navegador.";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (entrada: RequestInfo | URL) => {
+      const url = String(entrada);
+      if (url.includes("/linhas")) {
+        return {
+          ok: true,
+          json: async () => ({
+            total: 1,
+            pagina: 1,
+            tamanho: 200,
+            linhas: [
+              {
+                codigoDisciplina: "70132",
+                uuid: "22222222-2222-4222-8222-222222222222",
+                arquivo_origem: "capa.json",
+                arquivo_saida: "22222222-2222-4222-8222-222222222222az70132.txt",
+                status: "convertido",
+                diagnostico: frase,
+              },
+            ],
+          }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          id,
+          status: "concluido",
+          total: 1,
+          processados: 1,
+          contagens: { convertidos: 1, erros: 0, sem_codigo: 0, codigos_repetidos: 0, orfaos: 0 },
+          expiraEm: "2026-10-27T12:00:00.000Z",
+        }),
+      };
+    }),
+  );
+  render(
+    <MemoryRouter initialEntries={[`/arquivos/${id}`]}>
+      <Routes>
+        <Route path="/arquivos/:id" element={<Arquivos />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole("region", { name: "Tela do navegador" })).toBeTruthy();
+  expect(screen.getAllByText("capa.json")).toHaveLength(2);
+  expect(screen.getByText(frase)).toBeTruthy();
+  expect(screen.getByText("Convertido")).toBeTruthy();
+  expect(screen.queryByText("Erro")).toBeNull();
+  vi.unstubAllGlobals();
+});

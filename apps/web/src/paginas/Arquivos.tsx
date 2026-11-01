@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { FRASE_TELA_NAVEGADOR } from "@conversor/contratos";
 
 import { baixarArquivos, baixarLote, descartarLote, excluirArquivo, excluirArquivosProcessados, fecharLote, obterLinhas, obterLote, type Contagens, type Linha, type StatusLinha } from "../api.js";
 import { esquecerLote, guardarLote } from "../loteAtual.js";
@@ -41,6 +42,7 @@ export function Arquivos() {
   const [fechando, setFechando] = useState(false);
   const [linhaExcluir, setLinhaExcluir] = useState<LinhaVisivel | null>(null);
   const [excluindo, setExcluindo] = useState(false);
+  const [telas, setTelas] = useState<LinhaVisivel[]>([]);
   const carregouId = useRef<string | null>(null);
   const idVisto = useRef(id);
   const caixaTodas = useRef<HTMLInputElement>(null);
@@ -53,6 +55,7 @@ export function Arquivos() {
     setMarcas(new Map());
     setAvisoDownload("");
     setLinhaExcluir(null);
+    setTelas([]);
   }
 
   useEffect(() => {
@@ -79,6 +82,7 @@ export function Arquivos() {
       setLidos(0);
       setProcessados(0);
       setMensagem("");
+      setTelas([]);
       carregouId.current = null;
       return undefined;
     }
@@ -107,6 +111,18 @@ export function Arquivos() {
         if (!ativo || atual !== geracao) return;
         setTotalFiltrado(paginaResposta.total);
         setLinhas(paginaResposta.linhas.map(linhaDaResposta));
+        if (lote.status === "processando" || lote.status === "concluido") {
+          try {
+            const encontradas = await listarTelas(id);
+            if (!ativo || atual !== geracao) return;
+            setTelas(encontradas);
+          } catch {
+            if (!ativo || atual !== geracao) return;
+            setTelas([]);
+          }
+        } else {
+          setTelas([]);
+        }
         setFase("pronto");
         carregouId.current = id;
         if (lote.status !== "recebendo" && lote.status !== "processando") seguindo = false;
@@ -449,6 +465,36 @@ export function Arquivos() {
         ) : null}
         {avisoDownload ? <p className="aviso">{avisoDownload}</p> : null}
       </section>
+      {telas.length > 0 ? (
+        <section className="cartao painel" aria-label="Tela do navegador">
+          <h2>Tela do navegador</h2>
+          <p className="dica">A conversão seguiu. Estes arquivos têm imagem que parece a tela do navegador.</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Arquivo original</th>
+                <th>Saída</th>
+                <th>Código</th>
+              </tr>
+            </thead>
+            <tbody>
+              {telas.map((linha, indice) => (
+                <tr key={`tela-${linha.arquivo_origem}-${String(indice)}`}>
+                  <td>{linha.arquivo_origem}</td>
+                  <td>
+                    {linha.arquivo_saida && id && statusLote === "concluido" ? (
+                      <a href={`/api/lotes/${id}/arquivos/${encodeURIComponent(linha.arquivo_saida)}`}>{linha.arquivo_saida}</a>
+                    ) : (
+                      linha.arquivo_saida
+                    )}
+                  </td>
+                  <td>{linha.codigoDisciplina}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
       {linhaExcluir ? (
         <div
           className="cortina"
@@ -504,11 +550,24 @@ function estadoDaTela(temId: boolean, fase: Fase, quantidade: number, texto: str
 }
 
 function textoMotivo(linha: LinhaVisivel): string {
-  if (linha.status !== "erro") return "";
-  return linha.diagnostico
-    .split("; ")
-    .filter((frase) => frase.length > 0 && !frase.startsWith("Bloco ignorado:"))
-    .join("; ");
+  const frases = linha.diagnostico.split("; ").filter((frase) => frase.length > 0 && !frase.startsWith("Bloco ignorado:"));
+  if (linha.status !== "erro") return frases.filter((frase) => frase === FRASE_TELA_NAVEGADOR).join("; ");
+  return frases.join("; ");
+}
+
+async function listarTelas(id: string): Promise<LinhaVisivel[]> {
+  const encontradas: LinhaVisivel[] = [];
+  let paginaAtual = 1;
+  for (;;) {
+    const resposta = await obterLinhas(id, FRASE_TELA_NAVEGADOR, paginaAtual);
+    for (const linha of resposta.linhas) {
+      const visivel = linhaDaResposta(linha);
+      if (visivel.diagnostico.includes(FRASE_TELA_NAVEGADOR)) encontradas.push(visivel);
+    }
+    paginaAtual += 1;
+    if ((paginaAtual - 1) * TAMANHO_PAGINA >= resposta.total || paginaAtual > 50) break;
+  }
+  return encontradas;
 }
 
 function linhaDaResposta(linha: Linha): LinhaVisivel {

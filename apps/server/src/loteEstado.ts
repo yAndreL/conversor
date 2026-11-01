@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   FRASE_COLISAO,
+  FRASE_TELA_NAVEGADOR,
   FRASE_LEITURA,
   ordenarPorCodePoint,
   type LimitesContrato,
@@ -280,6 +281,8 @@ export function fraseDoMotivo(motivo: string): string {
       return "codigoDisciplina com tipo inválido.";
     case "colisao":
       return FRASE_COLISAO;
+    case "tela_navegador":
+      return FRASE_TELA_NAVEGADOR;
     case "orfao":
       return "";
     default:

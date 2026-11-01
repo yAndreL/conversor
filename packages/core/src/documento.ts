@@ -3,6 +3,7 @@ import sanitizeHtml from "sanitize-html";
 
 import { nivelDeHeading, niveisPadronizados } from "./hierarquia.js";
 import { apararEsquerda, ehEspaco, ehObjeto, srcDeImagemBase64 } from "./identidade.js";
+import { imagemMostraTelaDeNavegador } from "./telaNavegador.js";
 import { semSumario } from "./sumario.js";
 
 const TAGS_PERMITIDAS = [
@@ -46,7 +47,9 @@ export function renderizar(blocks: readonly unknown[]): { corpo: string; motivos
   const motivos: string[] = [];
   for (const bloco of blocos) {
     const [fragmento, motivo] = fragmentoDe(bloco, niveis);
-    if (motivo) motivos.push(motivo);
+    if (motivo && (motivo !== "tela_navegador" || !motivos.includes("tela_navegador"))) {
+      motivos.push(motivo);
+    }
     if (fragmento) fragmentos.push(fragmento);
   }
   const documento = fragmentos.join("\n").replace(FECHO_VAZIO, "");
@@ -85,10 +88,10 @@ function fragmentoDe(bloco: unknown, niveis: ReadonlyMap<object, number>): [stri
   if (tipo === "table") return [tabela(bloco), ""];
   if (tipo === "aside") return [`<p>${escapar(textoDe(bloco.text), true)}</p>`, ""];
   if (tipo === "list") return [htmlDaLista(bloco), ""];
-  if (tipo === "imageGroup") return [htmlDasImagens(bloco.images), ""];
+  if (tipo === "imageGroup") return [htmlDasImagens(bloco.images), motivoDeTela(bloco.images)];
   if (tipo === "image") {
     const html = htmlDasImagens([bloco]);
-    return html === "" ? ["", "bloco_ignorado:image"] : [html, ""];
+    return html === "" ? ["", "bloco_ignorado:image"] : [html, motivoDeTela([bloco])];
   }
   return ["", `bloco_ignorado:${tipo === undefined || tipo === null ? "None" : String(tipo)}`];
 }
@@ -103,6 +106,15 @@ function htmlDaLista(bloco: Record<string, unknown>): string {
   if (itens.length === 0) return "";
   const tag = bloco.ordered === true ? "ol" : "ul";
   return `<${tag}>${itens.join("")}</${tag}>`;
+}
+
+function motivoDeTela(imagens: unknown): string {
+  if (!Array.isArray(imagens)) return "";
+  for (const item of imagens) {
+    if (!ehObjeto(item) || typeof item.src !== "string") continue;
+    if (imagemMostraTelaDeNavegador(item.src)) return "tela_navegador";
+  }
+  return "";
 }
 
 function htmlDasImagens(imagens: unknown): string {
