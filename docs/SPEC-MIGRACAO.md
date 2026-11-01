@@ -104,7 +104,7 @@ Consequências registradas:
 - Mudança só de marcação (`<strong>`, `class`, aspas de atributo) deixa de mudar o UUID. No Python ela muda, porque o hash é o HTML sanitizado.
 - Dois documentos cujo texto visível coincide e cuja marcação difere passam a colidir pelo RF-24 quando o código sanitizado também coincide.
 - Um documento só com `imageGroup` ou `image` tem a chave `conteudo-v1\n`. O UUID muda em relação ao SHA-256 da string vazia, e documentos nessa situação compartilham o UUID entre si, como hoje compartilham o UUID do corpo vazio.
-- Incluir `list` faz o UUID mudar quando só a lista muda, embora o txt continue sem essa lista (RF-09, `bloco_ignorado:list`).
+- O bloco `list` entra no txt como `<ul>` ou `<ol>` (RF-32).
 
 Riscos de divergência que a forma canônica dos testes absorve, e que não entram na chave:
 
@@ -113,7 +113,7 @@ Riscos de divergência que a forma canônica dos testes absorve, e que não entr
 - `<br>` contra `<br />`, ordem de atributos, aspas e espaço entre tags.
 - O default de `nonTextTags` descartaria `textarea`, `option` e `noscript`. A configuração normativa não deixa isso acontecer.
 
-`list` e `image` continuam de fora do txt, com motivo `bloco_ignorado:{tipo}`.
+`list` entra no txt como `<ul>` ou `<ol>`. `image` sem `src` Base64 válido continua de fora, com motivo `bloco_ignorado:image`.
 
 ## Equivalência
 
