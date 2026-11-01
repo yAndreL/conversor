@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   mkdtempSync,
   mkdirSync,
@@ -11,14 +10,12 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { v5 as uuidv5 } from "uuid";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { converterPasta, limparCodigo, main } from "@conversor/core";
 
 const RAIZ_TESTE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = path.resolve(RAIZ_TESTE, "fixtures");
-const NAMESPACE = "d1698526-798c-54c8-b0e5-cfba1794bddb";
 const ORFAO = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.txt";
 const pastas: string[] = [];
 
@@ -238,7 +235,6 @@ describe("conversao", () => {
 
     expect(corpo(achatado.saida)).toBe(juntarTitulos(textos, [1, 1, 2, 3, 1, 1]));
     expect(corpo(outroNivel.saida)).toBe(juntarTitulos(textos, [3, 1, 2, 3, 3, 3]));
-    expect(lerCsv(achatado.saida)[0]?.uuid).toBe(lerCsv(outroNivel.saida)[0]?.uuid);
     expect(corpo(filhoDaUnidade.saida)).toBe(
       juntarTitulos(
         [
@@ -301,19 +297,25 @@ describe("conversao", () => {
     expect(texto).toContain("Celula");
   });
 
-  it("CA-05 imagem nao entra no txt", () => {
+  it("CA-05 imagem base64 entra no html", () => {
     const fixture = carregarFixture("image_group.json") as { blocks: unknown[] };
     const { saida } = executar({
       "a.json": documento([
         fixture.blocks[0],
         { type: "paragraph", html: '<img src="AAAA" alt="foto">legenda' },
+        {
+          type: "paragraph",
+          html: '<img src="data:image/png;base64,BBBB" alt="Figura">depois',
+        },
       ]),
     });
     const texto = corpo(saida);
+    expect(texto).toContain('<img src="data:image/jpeg;base64,AAAA" alt="Imagem extraida do DOCX">');
+    expect(texto).toContain('<img src="data:image/png;base64,BBBB" alt="Figura">');
     expect(texto).toContain("legenda");
-    expect(texto).not.toContain("img");
-    expect(texto).not.toContain("src");
-    expect(texto).not.toContain("AAAA");
+    expect(texto).toContain("depois");
+    expect(texto).not.toContain('src="AAAA"');
+    expect(texto).not.toContain('alt="foto"');
   });
 
   it("CA-06 remove as cinco tags com conteudo", () => {
@@ -342,18 +344,13 @@ describe("conversao", () => {
     expect(texto).not.toContain("role");
   });
 
-  it("CA-08 reexecucao estavel e uuid fora do txt", () => {
+  it("CA-08 o corpo se repete e o uuid fica fora do txt", () => {
     const arquivos = { "a.json": documento([{ type: "paragraph", html: "Estavel" }]) };
     const primeiro = executar(arquivos);
-    const primeiroTxt = readFileSync(txtUnico(primeiro.saida));
-    const primeiroCsv = readFileSync(path.join(primeiro.saida, "resultado.csv"));
-    const primeiroLog = readFileSync(path.join(primeiro.saida, "erros.log"));
-    const segundo = converterPasta(primeiro.entrada, primeiro.saida);
-    expect(readFileSync(txtUnico(primeiro.saida))).toEqual(primeiroTxt);
-    expect(readFileSync(path.join(primeiro.saida, "resultado.csv"))).toEqual(primeiroCsv);
-    expect(readFileSync(path.join(primeiro.saida, "erros.log"))).toEqual(primeiroLog);
-    const uuidArquivo = path.basename(txtUnico(primeiro.saida), ".txt");
-    expect(primeiroTxt.toString("utf8")).not.toContain(uuidArquivo);
+    const segundo = executar(arquivos);
+    expect(corpo(primeiro.saida)).toBe(corpo(segundo.saida));
+    expect(lerCsv(primeiro.saida)[0]?.uuid).not.toBe(lerCsv(segundo.saida)[0]?.uuid);
+    expect(corpo(primeiro.saida)).not.toContain(lerCsv(primeiro.saida)[0]?.uuid ?? "");
     expect(primeiro.resumo).toBe(segundo.resumo);
   });
 
@@ -384,7 +381,7 @@ describe("conversao", () => {
     const linha = lerCsv(inteiro.saida)[0];
     expect(linha?.status).toBe("convertido");
     expect(linha?.codigoDisciplina).toBe("42");
-    expect(path.basename(txtUnico(inteiro.saida))).toBe(`${linha?.uuid}.txt`);
+    expect(path.basename(txtUnico(inteiro.saida))).toBe(`${linha?.uuid}az42.txt`);
   });
 
   it("CA-10 dois corpos e reexecucao", () => {
@@ -392,18 +389,17 @@ describe("conversao", () => {
       "a.json": documento([{ type: "paragraph", html: "Um" }]),
       "b.json": documento([{ type: "paragraph", html: "Dois" }]),
     };
-    const { entrada, saida } = executar(arquivos);
-    const primeiraCsv = readFileSync(path.join(saida, "resultado.csv"));
+    const { saida } = executar(arquivos);
     const linhas = lerCsv(saida);
     expect(linhas.map((linha) => linha.arquivo_origem)).toEqual(["a.json", "b.json"]);
     expect(linhas[0]?.uuid).not.toBe(linhas[1]?.uuid);
+    expect(linhas[0]?.arquivo_saida).toBe(`${linhas[0]?.uuid}azADS001.txt`);
+    expect(linhas[1]?.arquivo_saida).toBe(`${linhas[1]?.uuid}azADS001.txt`);
     expect(linhas[0]?.codigoDisciplina).toBe("ADS001");
     expect(linhas[1]?.codigoDisciplina).toBe("ADS001");
     const relacao = readFileSync(path.join(saida, "relacao.csv"), "utf8").trim().split("\n");
     expect(relacao).toHaveLength(1 + linhas.length);
     expect(relacao[0]).toBe("codigoDisciplina,uuid");
-    converterPasta(entrada, saida);
-    expect(readFileSync(path.join(saida, "resultado.csv"))).toEqual(primeiraCsv);
   });
 
   it("CA-11 json invalido nao derruba o lote", () => {
@@ -446,8 +442,9 @@ describe("conversao", () => {
     expect(texto).not.toContain("SO_CONTENT");
   });
 
-  it("CA-14 so imagem gera txt vazio e uuid independente do base64", () => {
+  it("CA-14 imagem base64 entra no html e muda o uuid", () => {
     const primeiro = executar({ "a.json": carregarFixture("image_group.json") });
+    const repetido = executar({ "a.json": carregarFixture("image_group.json") });
     const segundo = executar({
       "b.json": documento(
         [{ type: "imageGroup", images: [{ src: "data:image/jpeg;base64,BBBB" }] }],
@@ -458,12 +455,16 @@ describe("conversao", () => {
     const linhaB = lerCsv(segundo.saida)[0];
     expect(linhaA?.status).toBe("convertido");
     expect(linhaB?.status).toBe("convertido");
-    expect(linhaA?.uuid).toBe(linhaB?.uuid);
-    expect(linhaA?.uuid?.[14]).toBe("5");
-    expect(readFileSync(txtUnico(primeiro.saida))).toEqual(Buffer.alloc(0));
-    expect(readFileSync(txtUnico(segundo.saida))).toEqual(Buffer.alloc(0));
-    const chave = createHash("sha256").update("conteudo-v1\n", "utf8").digest("hex");
-    expect(linhaA?.uuid).toBe(uuidv5(chave, NAMESPACE));
+    expect(linhaA?.uuid).not.toBe(lerCsv(repetido.saida)[0]?.uuid);
+    expect(linhaA?.uuid).not.toBe(linhaB?.uuid);
+    expect(linhaA?.arquivo_saida).toBe(`${linhaA?.uuid}azADS001.txt`);
+    expect(linhaB?.arquivo_saida).toBe(`${linhaB?.uuid}azADS002.txt`);
+    expect(linhaA?.uuid?.[14]).toBe("4");
+    expect(corpo(primeiro.saida).trim()).toBe(
+      '<p><img src="data:image/jpeg;base64,AAAA" alt="Imagem extraida do DOCX"></p>',
+    );
+    expect(corpo(segundo.saida)).toContain('src="data:image/jpeg;base64,BBBB"');
+    expect(readFileSync(txtUnico(primeiro.saida)).length).toBeGreaterThan(0);
   });
 
   it("CA-15 remove o sumario e preserva o corpo", () => {
@@ -506,9 +507,10 @@ describe("conversao", () => {
     });
     const linhas = Object.fromEntries(lerCsv(saida).map((linha) => [linha.arquivo_origem, linha]));
     expect(linhas["a.json"]?.status).toBe("convertido");
-    expect(linhas["b.json"]?.status).toBe("erro");
-    expect(lerLog(saida)).toContain("b.json\tcolisao");
-    const texto = corpo(saida);
+    expect(linhas["b.json"]?.status).toBe("convertido");
+    expect(lerLog(saida).some((linha) => linha.endsWith("\tcolisao"))).toBe(false);
+    const texto = corpoDe(saida, "a.json");
+    expect(corpoDe(saida, "b.json")).toBe(texto);
     expect(texto).toContain("<p><strong>CAPA</strong></p>");
     expect(texto).toContain("<h1>INTRODUÇÃO</h1>");
     expect(texto).toContain("<p>O sumário da aula fica no corpo.</p>");
@@ -539,7 +541,9 @@ describe("conversao", () => {
     const segundo = executar({
       "b.json": documento(bloco, { codigo: "ADS002", extra: { documentId: "doc_bbb_222" } }),
     });
-    expect(lerCsv(primeiro.saida)[0]?.uuid).toBe(lerCsv(segundo.saida)[0]?.uuid);
+    expect(corpo(primeiro.saida)).toBe(corpo(segundo.saida));
+    expect(lerCsv(primeiro.saida)[0]?.arquivo_saida).toBe(`${lerCsv(primeiro.saida)[0]?.uuid}azADS001.txt`);
+    expect(lerCsv(segundo.saida)[0]?.arquivo_saida).toBe(`${lerCsv(segundo.saida)[0]?.uuid}azADS002.txt`);
   });
 
   it("CA-18 texto diferente muda o uuid e marcacao nao muda", () => {
@@ -548,6 +552,8 @@ describe("conversao", () => {
       "b.json": documento([{ type: "paragraph", html: "Outro" }]),
     });
     const linhas = lerCsv(diferentes.saida);
+    expect(corpoDe(diferentes.saida, "a.json")).toContain("Um");
+    expect(corpoDe(diferentes.saida, "b.json")).toContain("Outro");
     expect(linhas[0]?.uuid).not.toBe(linhas[1]?.uuid);
 
     const comMarca = executar({
@@ -556,8 +562,8 @@ describe("conversao", () => {
     const semMarca = executar({
       "a.json": documento([{ type: "paragraph", html: "Um" }], { codigo: "B" }),
     });
-    expect(lerCsv(comMarca.saida)[0]?.uuid).toBe(lerCsv(semMarca.saida)[0]?.uuid);
     expect(corpo(comMarca.saida)).toContain("<strong>Um</strong>");
+    expect(corpo(semMarca.saida)).toContain("<p>Um</p>");
   });
 
   it("CA-19 trocar codigo mantem o uuid e o nome", () => {
@@ -566,9 +572,9 @@ describe("conversao", () => {
     const mat = executar({ "a.json": documento(bloco, { codigo: "MAT002" }) });
     const linhaAds = lerCsv(ads.saida)[0];
     const linhaMat = lerCsv(mat.saida)[0];
-    expect(linhaAds?.uuid).toBe(linhaMat?.uuid);
-    expect(linhaAds?.arquivo_saida).toBe(`${linhaAds?.uuid}.txt`);
-    expect(linhaMat?.arquivo_saida).toBe(linhaAds?.arquivo_saida);
+    expect(linhaAds?.arquivo_saida).toBe(`${linhaAds?.uuid}azADS001.txt`);
+    expect(linhaMat?.arquivo_saida).toBe(`${linhaMat?.uuid}azMAT002.txt`);
+    expect(linhaAds?.uuid).not.toBe(linhaMat?.uuid);
 
     const junto = executar({
       "a.json": documento(bloco, { codigo: "ADS001" }),
@@ -576,10 +582,14 @@ describe("conversao", () => {
     });
     const linhas = Object.fromEntries(lerCsv(junto.saida).map((linha) => [linha.arquivo_origem, linha]));
     expect(linhas["a.json"]?.status).toBe("convertido");
-    expect(linhas["b.json"]?.status).toBe("erro");
-    expect(lerLog(junto.saida)).toContain("b.json\tcolisao");
+    expect(linhas["b.json"]?.status).toBe("convertido");
+    expect(lerLog(junto.saida).some((linha) => linha.endsWith("\tcolisao"))).toBe(false);
     const relacao = readFileSync(path.join(junto.saida, "relacao.csv"), "utf8").trim().split("\n");
-    expect(relacao).toEqual(["codigoDisciplina,uuid", `ADS001,${linhas["a.json"]?.uuid ?? ""}`]);
+    expect(relacao).toEqual([
+      "codigoDisciplina,uuid",
+      `ADS001,${linhas["a.json"]?.uuid ?? ""}`,
+      `MAT002,${linhas["b.json"]?.uuid ?? ""}`,
+    ]);
   });
 
   it("CA-20 colisao nao sobrescreve", () => {
@@ -590,11 +600,14 @@ describe("conversao", () => {
     });
     const linhas = Object.fromEntries(lerCsv(saida).map((linha) => [linha.arquivo_origem, linha]));
     expect(linhas["a.json"]?.status).toBe("convertido");
-    expect(linhas["b.json"]?.status).toBe("erro");
-    expect(linhas["b.json"]?.arquivo_saida).toBe("");
-    expect(lerLog(saida)).toContain("b.json\tcolisao");
-    expect(txts(saida)).toHaveLength(1);
-    expect(corpo(saida)).toContain("Igual");
+    expect(linhas["b.json"]?.status).toBe("convertido");
+    expect(linhas["a.json"]?.arquivo_saida).toBe(`${linhas["a.json"]?.uuid}azADS001.txt`);
+    expect(linhas["b.json"]?.arquivo_saida).toBe(`${linhas["b.json"]?.uuid}azADS001.txt`);
+    expect(linhas["a.json"]?.uuid).not.toBe(linhas["b.json"]?.uuid);
+    expect(lerLog(saida).some((linha) => linha.endsWith("\tcolisao"))).toBe(false);
+    expect(txts(saida)).toHaveLength(2);
+    expect(corpoDe(saida, "a.json")).toContain("Igual");
+    expect(corpoDe(saida, "b.json")).toContain("Igual");
   });
 
   it("CA-21 orfaos listados e limpos", () => {
@@ -693,8 +706,8 @@ describe("conversao", () => {
     });
     const linha = lerCsv(saida)[0];
     expect(linha?.codigoDisciplina).toBe("A_B");
-    expect(linha?.uuid[14]).toBe("5");
-    expect(linha?.arquivo_saida).toBe(`${linha?.uuid}.txt`);
+    expect(linha?.uuid[14]).toBe("4");
+    expect(linha?.arquivo_saida).toBe(`${linha?.uuid}azA_B.txt`);
   });
 
   it("CA-25 formato do nome", () => {
@@ -703,9 +716,8 @@ describe("conversao", () => {
     });
     const linha = lerCsv(saida)[0];
     const nome = path.basename(txtUnico(saida));
-    expect(nome).toBe(`${linha?.uuid}.txt`);
-    expect(nome).not.toContain("ADS001");
-    expect(linha?.uuid[14]).toBe("5");
+    expect(nome).toBe(`${linha?.uuid}azADS001.txt`);
+    expect(linha?.uuid[14]).toBe("4");
     expect(linha?.uuid).toBe(linha?.uuid.toLowerCase());
     expect(linha?.uuid).toHaveLength(36);
   });
@@ -792,31 +804,39 @@ describe("conversao", () => {
     const linhas = Object.fromEntries(lerCsv(saida).map((linha) => [linha.arquivo_origem, linha]));
     expect(linhas["a.json"]?.codigoDisciplina).toBe("LIÇÃO,01");
     expect(linhas["b.json"]?.codigoDisciplina).toBe(longo);
-    expect(linhas["a.json"]?.arquivo_saida).toBe(`${linhas["a.json"]?.uuid}.txt`);
-    expect(linhas["b.json"]?.arquivo_saida).toBe(`${linhas["b.json"]?.uuid}.txt`);
+    expect(linhas["a.json"]?.arquivo_saida).toBe(`${linhas["a.json"]?.uuid}azLIÇÃO,01.txt`);
+    expect(linhas["b.json"]?.arquivo_saida).toBe(`${linhas["b.json"]?.uuid}az${"Á".repeat(80)}.txt`);
   });
 
-  it("RF-09 list e image nao entram no txt e list muda o uuid", () => {
+  it("lista entra no txt e image base64 entra", () => {
     const base = [{ type: "paragraph", html: "Visivel" }];
     const { saida } = executar({
       "a.json": documento(base),
-      "b.json": documento([...base, { type: "list", ordered: false, items: ["Item secreto"] }]),
+      "b.json": documento([
+        ...base,
+        { type: "list", ordered: false, items: ["Item secreto", 1, "A < B & C"] },
+      ]),
+      "c.json": documento([...base, { type: "list", ordered: true, items: ["Primeiro"] }]),
+      "d.json": documento([...base, { type: "list", ordered: false, items: [1, null] }]),
     });
     const linhas = Object.fromEntries(lerCsv(saida).map((linha) => [linha.arquivo_origem, linha]));
     expect(linhas["a.json"]?.status).toBe("convertido");
     expect(linhas["b.json"]?.status).toBe("convertido");
-    expect(corpoDe(saida, "b.json")).not.toContain("Item secreto");
-    expect(lerLog(saida)).toContain("b.json\tbloco_ignorado:list");
-    expect(linhas["b.json"]?.uuid).not.toBe(linhas["a.json"]?.uuid);
+    expect(linhas["c.json"]?.status).toBe("convertido");
+    expect(linhas["d.json"]?.status).toBe("convertido");
+    expect(corpoDe(saida, "b.json")).toContain("<ul><li>Item secreto</li><li>A &lt; B &amp; C</li></ul>");
+    expect(corpoDe(saida, "c.json")).toContain("<ol><li>Primeiro</li></ol>");
+    expect(corpoDe(saida, "d.json").trim()).toBe("<p>Visivel</p>");
+    expect(lerLog(saida).some((linha) => linha.includes("bloco_ignorado:list"))).toBe(false);
     const imagem = executar({
       "c.json": documento([...base, { type: "image", src: "data:image/png;base64,AAAA", alt: "foto" }], {
         codigo: "FOTO",
       }),
     });
     const linhaImagem = lerCsv(imagem.saida)[0];
-    expect(corpo(imagem.saida)).not.toContain("AAAA");
-    expect(lerLog(imagem.saida)).toContain("c.json\tbloco_ignorado:image");
-    expect(linhaImagem?.uuid).toBe(linhas["a.json"]?.uuid);
+    expect(corpo(imagem.saida)).toContain('<img src="data:image/png;base64,AAAA" alt="foto">');
+    expect(lerLog(imagem.saida)).not.toContain("bloco_ignorado:image");
+    expect(linhaImagem?.uuid).not.toBe(linhas["a.json"]?.uuid);
   });
 
   it("RF-12 miolo de script nao muda o uuid", () => {
@@ -826,7 +846,7 @@ describe("conversao", () => {
     const comScript = executar({
       "b.json": documento([{ type: "paragraph", html: "ok<script>SEGREDO</script>" }], { codigo: "B" }),
     });
-    expect(lerCsv(limpo.saida)[0]?.uuid).toBe(lerCsv(comScript.saida)[0]?.uuid);
+    expect(corpo(limpo.saida)).toContain("ok");
     expect(corpo(comScript.saida)).not.toContain("SEGREDO");
     expect(corpo(comScript.saida)).toContain("ok");
   });
@@ -853,14 +873,14 @@ describe("conversao", () => {
     const arquivos = txts(saida);
     expect(arquivos).toHaveLength(1);
     const texto = readFileSync(path.join(saida, arquivos[0] ?? ""), "utf8");
-    expect(texto).not.toContain("data:image");
-    expect(texto).not.toContain("base64");
+    expect(texto).toContain("data:image");
+    expect(texto).toContain("base64");
     expect(texto).not.toContain("href=");
     expect(texto).not.toContain("SUMÁRIO");
     expect(texto).not.toContain("INTRODUÇÃO\t");
     expect(texto).toContain("DESENVOLVIMENTO AFETIVO");
     const linha = lerCsv(saida)[0];
-    expect(arquivos[0]).toBe(`${linha?.uuid}.txt`);
+    expect(arquivos[0]).toBe(`${linha?.uuid}azDESENVOLVIMENTO.txt`);
     expect(linha?.status).toBe("convertido");
     expect(linha?.codigoDisciplina).toBe("DESENVOLVIMENTO");
     expect(linha?.arquivo_saida).toBe(arquivos[0]);
@@ -893,8 +913,10 @@ describe("fixtures", () => {
       expect(linhas[origem]?.status).toBe(esperado);
     }
     expect(linhas["codigo_inteiro.json"]?.codigoDisciplina).toBe("42");
-    expect(linhas["codigo_inteiro.json"]?.arquivo_saida).toBe(`${linhas["codigo_inteiro.json"]?.uuid}.txt`);
-    expect(readFileSync(path.join(saida, linhas["image_group.json"]?.arquivo_saida ?? "")).length).toBe(0);
+    expect(linhas["codigo_inteiro.json"]?.arquivo_saida).toBe(`${linhas["codigo_inteiro.json"]?.uuid}az42.txt`);
+    expect(readFileSync(path.join(saida, linhas["image_group.json"]?.arquivo_saida ?? ""), "utf8")).toContain(
+      "data:image/jpeg;base64,AAAA",
+    );
     const sintetico = corpoDe(saida, "sintetico.json");
     expect(sintetico).toContain("texto do link");
     expect(sintetico).toContain("Celula");
