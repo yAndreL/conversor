@@ -2,7 +2,7 @@ import { Parser } from "htmlparser2";
 import sanitizeHtml from "sanitize-html";
 
 import { nivelDeHeading, niveisPadronizados } from "./hierarquia.js";
-import { apararEsquerda, ehEspaco, ehObjeto } from "./identidade.js";
+import { apararEsquerda, ehEspaco, ehObjeto, srcDeImagemBase64 } from "./identidade.js";
 import { semSumario } from "./sumario.js";
 
 const TAGS_PERMITIDAS = [
@@ -29,10 +29,11 @@ const TAGS_PERMITIDAS = [
   "th",
   "td",
   "blockquote",
+  "img",
 ];
 
 const TAGS_SEM_CONTEUDO = ["script", "style", "iframe", "object", "embed"];
-const TAGS_VAZIAS = new Set(["br"]);
+const TAGS_VAZIAS = new Set(["br", "img"]);
 const INVISIVEIS = new Set(["\u200b", "\u200c", "\u200d", "\u2060", "\ufeff"]);
 const FECHO_VAZIO = /<(embed|img)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
 
@@ -54,11 +55,16 @@ export function renderizar(blocks: readonly unknown[]): { corpo: string; motivos
     allowedAttributes: {
       td: ["colspan", "rowspan"],
       th: ["colspan", "rowspan"],
+      img: ["src", "alt"],
+    },
+    allowedSchemes: ["http", "https", "ftp", "mailto", "tel", "data"],
+    allowedSchemesByTag: {
+      img: ["data"],
     },
     disallowedTagsMode: "discard",
     nonTextTags: TAGS_SEM_CONTEUDO,
     enforceHtmlBoundary: false,
-    selfClosing: ["br"],
+    selfClosing: ["br", "img"],
     parser: { decodeEntities: true },
   });
   return { corpo: podarEJuntar(limpo), motivos };
@@ -78,8 +84,40 @@ function fragmentoDe(bloco: unknown, niveis: ReadonlyMap<object, number>): [stri
   }
   if (tipo === "table") return [tabela(bloco), ""];
   if (tipo === "aside") return [`<p>${escapar(textoDe(bloco.text), true)}</p>`, ""];
-  if (tipo === "imageGroup") return ["", ""];
+  if (tipo === "list") return [htmlDaLista(bloco), ""];
+  if (tipo === "imageGroup") return [htmlDasImagens(bloco.images), ""];
+  if (tipo === "image") {
+    const html = htmlDasImagens([bloco]);
+    return html === "" ? ["", "bloco_ignorado:image"] : [html, ""];
+  }
   return ["", `bloco_ignorado:${tipo === undefined || tipo === null ? "None" : String(tipo)}`];
+}
+
+function htmlDaLista(bloco: Record<string, unknown>): string {
+  if (!Array.isArray(bloco.items)) return "";
+  const itens: string[] = [];
+  for (const item of bloco.items) {
+    if (typeof item !== "string") continue;
+    itens.push(`<li>${escapar(item, true)}</li>`);
+  }
+  if (itens.length === 0) return "";
+  const tag = bloco.ordered === true ? "ol" : "ul";
+  return `<${tag}>${itens.join("")}</${tag}>`;
+}
+
+function htmlDasImagens(imagens: unknown): string {
+  if (!Array.isArray(imagens)) return "";
+  const tags: string[] = [];
+  for (const item of imagens) {
+    if (!ehObjeto(item)) continue;
+    const src = srcDeImagemBase64(item.src);
+    if (!src) continue;
+    const alt = typeof item.alt === "string" ? item.alt : "";
+    const atributoAlt = alt === "" ? "" : ` alt="${escapar(alt, true)}"`;
+    tags.push(`<img src="${escapar(src, true)}"${atributoAlt}>`);
+  }
+  if (tags.length === 0) return "";
+  return `<p>${tags.join("")}</p>`;
 }
 
 function tagHeading(bloco: Record<string, unknown>, niveis: ReadonlyMap<object, number>): string | null {
@@ -190,6 +228,7 @@ function analisar(documento: string): Array<No | string> {
 
 function podar(no: No | string): No | string | null {
   if (typeof no === "string") return no;
+  if (no.tag === "img" && srcDeImagemBase64(atributo(no, "src")) === null) return null;
   const filhos: Array<No | string> = [];
   for (const filho of no.filhos) {
     const podado = podar(filho);
@@ -202,12 +241,16 @@ function podar(no: No | string): No | string | null {
 
 function deveRemover(no: No): boolean {
   if (!["p", "h1", "h2", "h3", "h4", "h5", "h6"].includes(no.tag)) return false;
-  if (no.tag === "p" && temBr(no)) return false;
+  if (no.tag === "p" && (temBr(no) || temImagem(no))) return false;
   return textoVazio(textoDoNo(no));
 }
 
 function temBr(no: No): boolean {
   return no.filhos.some((filho) => typeof filho !== "string" && (filho.tag === "br" || temBr(filho)));
+}
+
+function temImagem(no: No): boolean {
+  return no.filhos.some((filho) => typeof filho !== "string" && (filho.tag === "img" || temImagem(filho)));
 }
 
 function textoDoNo(no: No | string): string {
@@ -229,9 +272,22 @@ function serializar(no: No | string): string {
       }
     }
   }
+  if (no.tag === "img") return serializarImagem(no);
   if (TAGS_VAZIAS.has(no.tag)) return `<${no.tag}>`;
   const interno = no.filhos.map((filho) => serializar(filho)).join("");
   return `<${no.tag}${atributos}>${interno}</${no.tag}>`;
+}
+
+function serializarImagem(no: No): string {
+  const src = srcDeImagemBase64(atributo(no, "src"));
+  if (!src) return "";
+  const alt = atributo(no, "alt");
+  const atributoAlt = alt !== "" ? ` alt="${escapar(alt, true)}"` : "";
+  return `<img src="${escapar(src, true)}"${atributoAlt}>`;
+}
+
+function atributo(no: No, nome: string): string {
+  return no.attrs.find(([chave]) => chave === nome)?.[1] ?? "";
 }
 
 function aparar(texto: string): string {
