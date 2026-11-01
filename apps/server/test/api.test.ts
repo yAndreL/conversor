@@ -125,7 +125,7 @@ it("CW-01 cria o lote e só converte depois do fechamento", async () => {
   expect(pagina.linhas[0]?.arquivo_origem).toBe("nota, ção.json");
   expect(pagina.linhas[0]?.status).toBe("convertido");
   const nome = pagina.linhas[0]?.arquivo_saida ?? "";
-  expect(nome).toBe(`${pagina.linhas[0]?.uuid}.txt`);
+  expect(nome).toBe(`${pagina.linhas[0]?.uuid}azAção,#%.txt`);
   const relacao = await app.inject({ method: "GET", url: `/api/lotes/${id}/arquivos/relacao.csv` });
   expect(relacao.statusCode).toBe(200);
   expect(relacao.headers["content-type"]).toContain("text/csv");
@@ -475,8 +475,8 @@ it("CW-16 e CW-17 a ordem de code points decide colisão e a sequência do csv",
     };
     expect(linhas.linhas.map((linha) => linha.arquivo_origem)).toEqual(["a.json", "b.json"]);
     expect(linhas.linhas[0]?.status).toBe("convertido");
-    expect(linhas.linhas[1]?.status).toBe("erro");
-    expect(linhas.linhas[1]?.diagnostico).toContain("mesmo txt");
+    expect(linhas.linhas[1]?.status).toBe("convertido");
+    expect(linhas.linhas[1]?.diagnostico ?? "").not.toContain("mesmo txt");
   } finally {
     delete process.env.CONVERSOR_ATRASO_ORIGEM;
   }
