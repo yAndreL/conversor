@@ -5,7 +5,6 @@ import { semSumario } from "./sumario.js";
 
 export const NAMESPACE = "d1698526-798c-54c8-b0e5-cfba1794bddb";
 
-const TIPOS_EXCLUIDOS = new Set(["imageGroup", "image"]);
 const TAGS_SEM_CONTEUDO = new Set(["script", "style", "iframe", "object", "embed"]);
 
 export function identificadorDe(canonico: string): string {
@@ -18,7 +17,6 @@ export function chaveCanonica(blocks: readonly unknown[]): string {
   for (const bloco of semSumario(blocks)) {
     if (!ehObjeto(bloco)) continue;
     const tipo = typeof bloco.type === "string" ? bloco.type : "";
-    if (TIPOS_EXCLUIDOS.has(tipo)) continue;
     saida += `${tipo}\u001f${textoDoBloco(bloco, tipo)}\u001e`;
   }
   return saida;
@@ -42,7 +40,35 @@ function textoDoBloco(bloco: Record<string, unknown>, tipo: string): string {
       : [];
     return `${ordered}\n${itens.join("\n")}`;
   }
+  if (tipo === "imageGroup") return textoDasImagens(bloco.images);
+  if (tipo === "image") return textoDasImagens([bloco]);
   return typeof bloco.text === "string" ? bloco.text : "";
+}
+
+function textoDasImagens(imagens: unknown): string {
+  if (!Array.isArray(imagens)) return "";
+  const partes: string[] = [];
+  for (const item of imagens) {
+    if (!ehObjeto(item)) continue;
+    const src = srcDeImagemBase64(item.src);
+    if (!src) continue;
+    const alt = typeof item.alt === "string" ? item.alt : "";
+    partes.push(`${alt}\n${src}`);
+  }
+  return partes.join("\n");
+}
+
+export function srcDeImagemBase64(valor: unknown): string | null {
+  if (typeof valor !== "string") return null;
+  const src = valor.trim();
+  const marcador = ";base64,";
+  const indice = src.toLowerCase().indexOf(marcador);
+  if (!src.toLowerCase().startsWith("data:image/") || indice < "data:image/".length) return null;
+  const mime = src.slice("data:image/".length, indice);
+  if (!/^[a-zA-Z0-9.+-]+$/.test(mime)) return null;
+  const carga = src.slice(indice + marcador.length);
+  if (carga.length === 0 || /[^A-Za-z0-9+/=]/.test(carga)) return null;
+  return src;
 }
 
 function textoDasCelulas(rows: unknown): string {
@@ -88,7 +114,13 @@ function removerMarcacao(html: string): string {
       indice = pularConteudo(html, tag.fim, nome);
       continue;
     }
-    if ((nome === "img" || nome === "embed") && !tag.fechamento) {
+    if (nome === "img" && !tag.fechamento) {
+      const src = srcDoAtributo(html.slice(indice, tag.fim));
+      if (src) saida += src;
+      indice = tag.autoFecha ? tag.fim : pularConteudo(html, tag.fim, nome);
+      continue;
+    }
+    if (nome === "embed" && !tag.fechamento) {
       indice = tag.autoFecha ? tag.fim : pularConteudo(html, tag.fim, nome);
       continue;
     }
@@ -120,6 +152,11 @@ function pularConteudo(html: string, inicio: number, nome: string): number {
     indice = tag.fim;
   }
   return indice;
+}
+
+function srcDoAtributo(tagBruta: string): string | null {
+  const aspas = /(?:^|\s)src\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tagBruta);
+  return srcDeImagemBase64(aspas?.[1] ?? aspas?.[2]);
 }
 
 type TagLida = { nome: string; fim: number; fechamento: boolean; autoFecha: boolean };
